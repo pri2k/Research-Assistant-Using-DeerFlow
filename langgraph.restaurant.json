@@ -1,0 +1,22 @@
+
+{
+  "nodes": [
+    { "id": "coord", "type": "Coordinator" },
+    { "id": "plan",  "type": "Planner" },
+    {
+      "id": "search",
+      "type": "ToolExecutor",
+      "tool": "places_search",
+      "args": {
+        "text": "${user_query.cuisine} restaurants",
+        "filter": "countrycode:${user_query.country}"
+      }
+    },
+    { "id": "report","type":"Reporter" }
+  ],
+  "edges": [
+    ["coord","plan"],
+    ["plan","search"],
+    ["search","report"]
+  ]
+}
