@@ -23,22 +23,23 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 
 SCOPES = [
-    'https://www.googleapis.com/auth/spreadsheets',
-    'https://www.googleapis.com/auth/gmail.send'
+    "https://www.googleapis.com/auth/spreadsheets",
+    "https://www.googleapis.com/auth/gmail.send",
 ]
 
 
-CREDENTIALS_FILE = 'credentials.json'
-TOKEN_PICKLE = 'token.pickle'
+CREDENTIALS_FILE = "credentials.json"
+TOKEN_PICKLE = "token.pickle"
 
 genai.configure(api_key=GEMINI_API_KEY)
-gemini_model = genai.GenerativeModel('gemini-2.0-flash')
+gemini_model = genai.GenerativeModel("gemini-2.0-flash")
+
 
 def get_user_credentials():
     """Retrieve or refresh user credentials for Google Sheets"""
     creds = None
     if os.path.exists(TOKEN_PICKLE):
-        with open(TOKEN_PICKLE, 'rb') as token:
+        with open(TOKEN_PICKLE, "rb") as token:
             creds = pickle.load(token)
 
     if not creds or not creds.valid:
@@ -47,24 +48,28 @@ def get_user_credentials():
         else:
             flow = InstalledAppFlow.from_client_secrets_file(CREDENTIALS_FILE, SCOPES)
             creds = flow.run_local_server(port=0)
-        with open(TOKEN_PICKLE, 'wb') as token:
+        with open(TOKEN_PICKLE, "wb") as token:
             pickle.dump(creds, token)
 
     return creds
 
+
 creds = get_user_credentials()
-service = build('sheets', 'v4', credentials=creds)
+service = build("sheets", "v4", credentials=creds)
 sheet = service.spreadsheets()
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Sync Function: Check, Query Gemini, Write Back
 # ─────────────────────────────────────────────────────────────────────────────
 def fetch_sheet_data():
     """Fetch customer data from the Google Sheet and return it as a DataFrame."""
-    result = service.spreadsheets().values().get(
-        spreadsheetId=SPREADSHEET_ID,
-        range=RANGE_NAME
-    ).execute()
+    result = (
+        service.spreadsheets()
+        .values()
+        .get(spreadsheetId=SPREADSHEET_ID, range=RANGE_NAME)
+        .execute()
+    )
 
     values = result.get("values", [])
     filtered_values = [row for row in values if any(cell.strip() for cell in row)]
@@ -79,23 +84,26 @@ def fetch_sheet_data():
     num_columns = len(headers)
 
     normalized_rows = [
-        row[:num_columns] + [''] * (num_columns - len(row))
-        if len(row) != num_columns else row
+        (
+            row[:num_columns] + [""] * (num_columns - len(row))
+            if len(row) != num_columns
+            else row
+        )
         for row in data_rows
     ]
 
     df = pd.DataFrame(normalized_rows, columns=headers)
 
-    values = result.get('values', [])
+    values = result.get("values", [])
 
     return df
 
+
 def replyToQuery(query: str, answer: str) -> str:
     """Write a proper answer to the query given the data"""
-    
+
     # Build structured prompt for Gemini
-    prompt = (
-        f"""You are a research assistant for a travel company. 
+    prompt = f"""You are a research assistant for a travel company. 
         You need to answer queries that customers have. 
         I will provide you with a query and a researched answer. 
         Your task is to rewrite it clearly and professionally, keeping all useful information like phone numbers, addresses, links, and important facts. 
@@ -105,8 +113,6 @@ def replyToQuery(query: str, answer: str) -> str:
 
         \n\n Make sure you only return the Rewritten response and nothing else in plain text.
         """
-    )
-
 
     response = gemini_model.generate_content(prompt)
     # print("Response is")
@@ -125,23 +131,18 @@ def sync_sheet():
         # exit
 
         for index, row in df.iterrows():
-            query = row.get("DeerFlow", "").strip().lower() 
-            answer = row.get("Answer", "").strip().lower() 
+            query = row.get("DeerFlow", "").strip().lower()
+            answer = row.get("Answer", "").strip().lower()
             if query == "" or answer != "":
-                continue  
+                continue
 
             print(f"Processing: {query}")
 
             payload = {
-                "messages": [
-                    {
-                        "role": "user",
-                        "content": query
-                    }
-                ],
+                "messages": [{"role": "user", "content": query}],
                 "thread_id": "_default_",
-                "max_plan_iterations": 5,        # Increase planning steps for deeper research
-                "max_step_num": 5,               # Allow more steps in the AI’s workflow for details
+                "max_plan_iterations": 5,  # Increase planning steps for deeper research
+                "max_step_num": 5,  # Allow more steps in the AI’s workflow for details
                 "auto_accepted_plan": True,
                 "interrupt_feedback": "",
                 "mcp_settings": {
@@ -152,18 +153,28 @@ def sync_sheet():
                         "Use latest and trusted travel and restaurant data",
                         "Be polite, clear, and provide thorough explanations with examples or highlights",
                     ],
-                    "preferred_sources": ["Google Maps", "Michelin Guide", "TripAdvisor", "Zomato", "Official Restaurant Websites"],
+                    "preferred_sources": [
+                        "Google Maps",
+                        "Michelin Guide",
+                        "TripAdvisor",
+                        "Zomato",
+                        "Official Restaurant Websites",
+                    ],
                     "tone": "Polite, helpful, and detailed",
-                    "tools": ["web_search", "reservation_info_api", "review_aggregation_api"],
-                    "response_format": "JSON with detailed fields: name, location, type, rating, reservation details, ambiance, price range, and brief summary"
+                    "tools": [
+                        "web_search",
+                        "reservation_info_api",
+                        "review_aggregation_api",
+                    ],
+                    "response_format": "JSON with detailed fields: name, location, type, rating, reservation details, ambiance, price range, and brief summary",
                 },
                 "enable_background_investigation": True,
-                "debug": False
+                "debug": False,
             }
 
-                
-
-            r = requests.post("http://localhost:8000/api/chat/stream", json=payload, stream=True)
+            r = requests.post(
+                "http://localhost:8000/api/chat/stream", json=payload, stream=True
+            )
 
             if r.status_code == 200:
                 print("----- RAW RESPONSE START -----")
@@ -189,18 +200,16 @@ def sync_sheet():
                 fullAns = replyToQuery(query, ans)
 
                 headers = df.columns.tolist()
-                answer_col_index = headers.index("Answer")  
-                column_letter = chr(65 + answer_col_index)    
+                answer_col_index = headers.index("Answer")
+                column_letter = chr(65 + answer_col_index)
 
                 update_range = f"CustomerEnquiry!{column_letter}{index+2}"
-                body = {
-                    "values": [[fullAns]]
-                }
+                body = {"values": [[fullAns]]}
                 service.spreadsheets().values().update(
                     spreadsheetId=SPREADSHEET_ID,
                     range=update_range,
                     valueInputOption="RAW",
-                    body=body
+                    body=body,
                 ).execute()
                 print(f"📝 Wrote answer to {update_range}")
 
@@ -210,6 +219,7 @@ def sync_sheet():
 
     except Exception as e:
         print(f"Exception during sync: {e}")
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Run Every 10 Seconds
