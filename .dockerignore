@@ -1,4 +1,4 @@
-.env
+# .env
 Dockerfile
 .dockerignore
 .git
@@ -43,7 +43,7 @@ npm-debug.log
 Thumbs.db
 
 # Project specific
-conf.yaml
+# conf.yaml
 web/
 docs/
 examples/

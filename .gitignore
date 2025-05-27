@@ -9,7 +9,8 @@ wheels/
 agent_history.gif
 static/browser_history/*.gif
 conf.yaml
-
+*.pickle
+credentials.json
 # Virtual environments
 .venv
 
